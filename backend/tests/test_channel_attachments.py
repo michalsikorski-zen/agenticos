@@ -470,7 +470,7 @@ class TestChoosingWhatToSendBack:
     async def test_a_materialised_skill_is_not_the_agents_work(self):
         backend = StateBackend()
         before = await workspace_snapshot(backend)
-        backend.write("/skills/refunds/SKILL.md", "---\nname: refunds\n---\n\nbody")
+        backend.write("/workspace/skills/refunds/SKILL.md", "---\nname: refunds\n---\n\nbody")
 
         assert (await files_written(backend, before)).attachments == []
 

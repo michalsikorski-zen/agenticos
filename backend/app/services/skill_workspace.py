@@ -7,8 +7,8 @@ quote and not run, while the same agent had a shell one tool call away.
 
 So when a run has both skills and a workspace, the skills are also files:
 
-    /skills/<name>/SKILL.md      the body, with its name and description
-    /skills/<name>/<resource>    each resource, beside it
+    /workspace/skills/<name>/SKILL.md      the body, with its name and description
+    /workspace/skills/<name>/<resource>    each resource, beside it
 
 `SKILL.md` is the format `pydantic-ai-skills` already reads, and the frontmatter
 is parsed with that library's own parser rather than a second one of ours - two
@@ -40,7 +40,12 @@ from app.db.models.skill import Skill
 
 logger = logging.getLogger(__name__)
 
-SKILLS_ROOT = "/skills"
+# Inside the workspace, not beside it. The container runtimes run as an unprivileged user
+# (`_image.py` refuses root), and `/` is root's: `mkdir -p /skills` fails with "Permission
+# denied", every write is refused, and the agent that was promised its scripts on disk finds
+# no /skills at all (2026-09-14, first live run of a skill with 81 resources). `/workspace` is
+# the one directory every backend guarantees writable, so the skills live under it.
+SKILLS_ROOT = "/workspace/skills"
 BODY_FILE = "SKILL.md"
 
 # A ceiling on what one turn may propose, per file. Skills are instructions and
@@ -208,7 +213,7 @@ def _skill_of(path: str) -> str | None:
     """The directory a path sits in, which is the skill's name.
 
     `None` for anything not exactly one level deep. A skill is a directory of
-    files; nesting is not part of the format, and treating `/skills/a/b/c` as
+    files; nesting is not part of the format, and treating `/workspace/skills/a/b/c` as
     belonging to `a` would flatten two files onto one name.
     """
     rest = path[len(SKILLS_ROOT) + 1 :] if path.startswith(f"{SKILLS_ROOT}/") else ""

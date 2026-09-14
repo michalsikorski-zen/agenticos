@@ -868,10 +868,10 @@ class TestListingAStoredWorkspace:
         from app.services.sandbox_workspace import stored_entries
 
         stored = StateBackend()
-        stored.write("/skills/refunds/.keep", "")
+        stored.write("/workspace/skills/refunds/.keep", "")
 
         assert [str(entry["path"]) for entry in stored_entries(dict(stored.files))] == [
-            "/skills/refunds/.keep"
+            "/workspace/skills/refunds/.keep"
         ]
 
     def test_nothing_is_listed_twice_when_both_patterns_match(self):
@@ -3755,7 +3755,7 @@ class TestWhatTheBrowserDoesNotShow:
     async def test_a_conversations_files_are_the_conversations(self, monkeypatch, mock_db_session):
         stored = StateBackend()
         stored.write("/uploads/book.pdf", "a")
-        stored.write("/skills/code-review/SKILL.md", "b")
+        stored.write("/workspace/skills/code-review/SKILL.md", "b")
         stored.write("/report.csv", "c")
         row = _row(files=dict(stored.files))
         monkeypatch.setattr(workspace_repo, "list_for_conversation", AsyncMock(return_value=[row]))
@@ -3775,7 +3775,7 @@ class TestWhatTheBrowserDoesNotShow:
         from app.repositories import agent as agent_repo
 
         stored = StateBackend()
-        stored.write("/skills/code-review/checklist.md", "a")
+        stored.write("/workspace/skills/code-review/checklist.md", "a")
         stored.write("/summary.md", "b")
         row = _row(files=dict(stored.files))
         monkeypatch.setattr(workspace_repo, "list_for_reader", AsyncMock(return_value=[row]))
@@ -3793,8 +3793,8 @@ class TestWhatTheBrowserDoesNotShow:
         from app.repositories import agent as agent_repo
 
         stored = StateBackend()
-        stored.write("/skills/code-review/SKILL.md", "a")
-        stored.write("/skills/code-review/checklist.md", "b")
+        stored.write("/workspace/skills/code-review/SKILL.md", "a")
+        stored.write("/workspace/skills/code-review/checklist.md", "b")
         stored.write("/summary.md", "c")
         row = _row(files=dict(stored.files))
         monkeypatch.setattr(workspace_repo, "list_for_reader", AsyncMock(return_value=[row]))
