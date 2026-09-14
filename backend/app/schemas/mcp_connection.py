@@ -235,6 +235,14 @@ class McpOAuthStart(BaseSchema):
 
     name: str = Field(..., min_length=1, max_length=32, pattern=NAME_PATTERN)
     url: str = Field(..., min_length=1, max_length=2048)
+    # A client the operator registered at the provider by hand. Most MCP servers
+    # register this app dynamically (RFC 7591) and these stay empty; HubSpot's
+    # remote server publishes no `registration_endpoint` and hands out client
+    # credentials only through an "MCP auth app" created in the account, so the
+    # flow needs a way to be told them. The secret is sealed into the pending
+    # payload with the rest of the flow state and never read back over the API.
+    client_id: str | None = Field(default=None, min_length=1, max_length=512)
+    client_secret: str | None = Field(default=None, min_length=1, max_length=4096)
     catalog_key: str | None = Field(
         default=None,
         max_length=255,
