@@ -21,8 +21,6 @@ export const securityHeaders: readonly SecurityHeader[] = [
   {
     // 0, not "1; mode=block": the legacy auditor is deprecated and its blocking
     // mode opens XS-Leak vectors, so OWASP is to disable it and rely on the CSP.
-    // This matches the backend and the bundled Nginx, so a proxied response does
-    // not carry two conflicting values.
     key: "X-XSS-Protection",
     value: "0",
   },
