@@ -102,3 +102,23 @@ def instrument_agent(
         logger.exception("agent_logfire_instrument_failed", extra={"service_name": service_name})
         return False
     return True
+
+
+def suppress_content(agent: PydanticAgent[Any, Any]) -> None:
+    """Trace this agent to the deployment's own project, but without its content.
+
+    The deployment enables Pydantic AI instrumentation globally at startup
+    (`app/main.py`), content on by default, so an agent that asked for
+    `content="none"` but has no per-agent exporter - no token, an environment that
+    carries the token instead, or a token that has gone missing since publish -
+    would otherwise fall back to that global default and export its prompts and
+    tool arguments to the operator's project. Pinning the agent to a content-free
+    instrumentation on the same default tracer keeps the timing, tokens and cost
+    and drops the content, so `none` holds wherever the run's spans land. Swallows
+    a failure for the same reason `instrument_agent` does: an agent that cannot be
+    instrumented still answers.
+    """
+    try:
+        logfire.instrument_pydantic_ai(agent, include_content=False)
+    except Exception:
+        logger.exception("agent_content_suppress_failed")

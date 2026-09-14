@@ -151,19 +151,20 @@ describe("the tracing card", () => {
     expect(screen.getByLabelText("Environment")).toBeDisabled();
   });
 
-  it("unlocks them once a token is chosen", () => {
+  it("unlocks the service name and environment once a token is chosen", () => {
     mount({ token_secret_id: "s-logfire" });
 
     expect(screen.getByLabelText("Service name")).toBeEnabled();
     expect(screen.getByLabelText("Environment")).toBeEnabled();
-    expect(screen.getByLabelText("Trace content")).toBeEnabled();
   });
 
-  it("locks trace content until a token is chosen", () => {
-    // The content mode only bites on a per-agent project, which is the token.
+  it("leaves trace content settable without a token", () => {
+    // Unlike the service name and environment, `none` is meaningful with no
+    // per-agent token: an environment can carry the token, and it suppresses
+    // content on the deployment's own traces too.
     mount();
 
-    expect(screen.getByLabelText("Trace content")).toBeDisabled();
+    expect(screen.getByLabelText("Trace content")).toBeEnabled();
   });
 
   it("defaults trace content to full", () => {
@@ -181,6 +182,28 @@ describe("the tracing card", () => {
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ token_secret_id: "s-logfire", content: "none" }),
     );
+  });
+
+  it("keeps a content-only block when none is chosen without a token", async () => {
+    // The block must survive with no token so an environment-routed run honours
+    // it - a plain `null` here would discard the choice.
+    const { onChange } = mount();
+
+    await userEvent.click(screen.getByLabelText("Trace content"));
+    await userEvent.click(screen.getByRole("option", { name: /None/ }));
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ content: "none" }));
+    expect(onChange).not.toHaveBeenCalledWith(null);
+  });
+
+  it("clears the block when content returns to full without a token", async () => {
+    // A `full` content-only block is the same as no tracing at all, so it goes.
+    const { onChange } = mount({ content: "none" });
+
+    await userEvent.click(screen.getByLabelText("Trace content"));
+    await userEvent.click(screen.getByRole("option", { name: /Full/ }));
+
+    expect(onChange).toHaveBeenCalledWith(null);
   });
 
   it("records the token that was picked", async () => {

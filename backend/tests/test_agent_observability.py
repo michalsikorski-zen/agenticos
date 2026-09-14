@@ -10,7 +10,7 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 from app.agents.factory import _instrument
-from app.agents.observability import instrument_agent
+from app.agents.observability import instrument_agent, suppress_content
 from app.agents.spec import AgentSpec, ObservabilitySpec
 from app.core.secret_kinds import ApiKeySecret
 
@@ -93,6 +93,91 @@ class TestInstrumentation:
 
         instrument.assert_not_called()
 
+    def test_none_without_a_token_suppresses_content_on_the_default_tracer(self):
+        """The P1 gap: no per-agent token, so no exporter attaches - but the
+        deployment instruments Pydantic AI globally with content on, so the run's
+        prompts would still reach the operator's project. `none` must pin the
+        agent content-free regardless (#1413). This is also the environment-routed
+        case, where the token lives on the environment, not the agent."""
+        spec = AgentSpec(name="a", observability=ObservabilitySpec(content="none"))
+
+        with (
+            patch(f"{MODULE}.instrument_agent") as instrument,
+            patch(f"{MODULE}.suppress_content") as suppress,
+        ):
+            _instrument(MagicMock(), spec, {}, agent_id=None)
+
+        instrument.assert_not_called()
+        suppress.assert_called_once()
+
+    def test_none_with_a_deleted_token_still_suppresses_content(self):
+        """A token removed after publish leaves no exporter; the agent must not
+        fall back to full-content deployment traces."""
+        spec = AgentSpec(
+            name="a",
+            observability=ObservabilitySpec(token_secret_id=uuid.uuid4(), content="none"),
+        )
+
+        with (
+            patch(f"{MODULE}.instrument_agent") as instrument,
+            patch(f"{MODULE}.suppress_content") as suppress,
+        ):
+            _instrument(MagicMock(), spec, {}, agent_id=None)
+
+        instrument.assert_not_called()
+        suppress.assert_called_once()
+
+    def test_none_falls_back_to_suppression_when_the_exporter_fails(self):
+        """The per-agent exporter can fail to attach - a bad token, a Logfire
+        outage - and content must still be suppressed rather than left to the
+        global default."""
+        secret_id = uuid.uuid4()
+        spec = AgentSpec(
+            name="a",
+            observability=ObservabilitySpec(token_secret_id=secret_id, content="none"),
+        )
+
+        with (
+            patch(f"{MODULE}.instrument_agent", return_value=False) as instrument,
+            patch(f"{MODULE}.suppress_content") as suppress,
+        ):
+            _instrument(MagicMock(), spec, {secret_id: _secret()}, agent_id=None)
+
+        instrument.assert_called_once()
+        suppress.assert_called_once()
+
+    def test_none_with_a_working_exporter_does_not_also_suppress(self):
+        """A per-agent exporter that attaches content-free already overrides the
+        global default for this agent, so no second instrumentation is needed."""
+        secret_id = uuid.uuid4()
+        spec = AgentSpec(
+            name="a",
+            observability=ObservabilitySpec(token_secret_id=secret_id, content="none"),
+        )
+
+        with (
+            patch(f"{MODULE}.instrument_agent", return_value=True) as instrument,
+            patch(f"{MODULE}.suppress_content") as suppress,
+        ):
+            _instrument(MagicMock(), spec, {secret_id: _secret()}, agent_id=None)
+
+        instrument.assert_called_once()
+        suppress.assert_not_called()
+
+    def test_full_without_a_token_is_left_on_the_deployment_default(self):
+        """`full` with no per-agent token is the ordinary agent: the global
+        instrumentation handles it, and neither path here fires."""
+        spec = AgentSpec(name="a", observability=ObservabilitySpec(content="full"))
+
+        with (
+            patch(f"{MODULE}.instrument_agent") as instrument,
+            patch(f"{MODULE}.suppress_content") as suppress,
+        ):
+            _instrument(MagicMock(), spec, {}, agent_id=None)
+
+        instrument.assert_not_called()
+        suppress.assert_not_called()
+
 
 class TestContentReachesLogfire:
     """The content decision has to reach the instrumentation call, not stop at
@@ -127,6 +212,22 @@ class TestContentReachesLogfire:
             )
 
         assert instance.instrument_pydantic_ai.call_args.kwargs["include_content"] is True
+
+    def test_suppress_content_pins_the_agent_to_content_free_default_tracing(self):
+        """Uses the default (deployment) instance, so timing and cost still land
+        in the operator's project - only the content is dropped."""
+        with patch("app.agents.observability.logfire.instrument_pydantic_ai") as instrument:
+            suppress_content(MagicMock())
+
+        assert instrument.call_args.kwargs["include_content"] is False
+
+    def test_suppress_content_swallows_a_failure(self):
+        """An agent whose instrumentation cannot attach still answers questions."""
+        with patch(
+            "app.agents.observability.logfire.instrument_pydantic_ai",
+            side_effect=RuntimeError("boom"),
+        ):
+            suppress_content(MagicMock())  # must not raise
 
 
 class TestSpec:
