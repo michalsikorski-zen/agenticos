@@ -138,6 +138,24 @@ export function ObservabilityCard({
           />
           <p className="text-muted-foreground text-xs">{t("separatesStagingTrafficFrom")}</p>
         </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="logfire-content">{t("traceContent")}</Label>
+          <Select
+            value={value?.content ?? "full"}
+            disabled={disabled || selected === null}
+            onValueChange={(content) => update({ content: content as "full" | "none" })}
+          >
+            <SelectTrigger id="logfire-content">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="full">{t("traceContentFull")}</SelectItem>
+              <SelectItem value="none">{t("traceContentNone")}</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-muted-foreground text-xs">{t("traceContentHint")}</p>
+        </div>
       </CardContent>
     </Card>
   );

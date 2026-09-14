@@ -156,6 +156,31 @@ describe("the tracing card", () => {
 
     expect(screen.getByLabelText("Service name")).toBeEnabled();
     expect(screen.getByLabelText("Environment")).toBeEnabled();
+    expect(screen.getByLabelText("Trace content")).toBeEnabled();
+  });
+
+  it("locks trace content until a token is chosen", () => {
+    // The content mode only bites on a per-agent project, which is the token.
+    mount();
+
+    expect(screen.getByLabelText("Trace content")).toBeDisabled();
+  });
+
+  it("defaults trace content to full", () => {
+    mount({ token_secret_id: "s-logfire" });
+
+    expect(screen.getByLabelText("Trace content")).toHaveTextContent(/Full/);
+  });
+
+  it("records the choice to send no message content", async () => {
+    const { onChange } = mount({ token_secret_id: "s-logfire" });
+
+    await userEvent.click(screen.getByLabelText("Trace content"));
+    await userEvent.click(screen.getByRole("option", { name: /None/ }));
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ token_secret_id: "s-logfire", content: "none" }),
+    );
   });
 
   it("records the token that was picked", async () => {
