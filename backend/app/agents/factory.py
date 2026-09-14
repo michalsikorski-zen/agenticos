@@ -481,4 +481,5 @@ def _instrument(
         token=secret.api_key.get_secret_value(),
         service_name=observability.service_name or spec.name,
         environment=observability.environment,
+        include_content=observability.content != "none",
     )

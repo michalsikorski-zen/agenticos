@@ -10,6 +10,7 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 from app.agents.factory import _instrument
+from app.agents.observability import instrument_agent
 from app.agents.spec import AgentSpec, ObservabilitySpec
 from app.core.secret_kinds import ApiKeySecret
 
@@ -47,6 +48,31 @@ class TestInstrumentation:
         assert kwargs["service_name"] == "acme-support"
         assert kwargs["environment"] == "production"
 
+    def test_full_content_is_the_default_and_records_everything(self):
+        """An agent that says nothing about content traces as it always did."""
+        secret_id = uuid.uuid4()
+        spec = AgentSpec(name="Support", observability=ObservabilitySpec(token_secret_id=secret_id))
+
+        with patch(f"{MODULE}.instrument_agent") as instrument:
+            _instrument(MagicMock(), spec, {secret_id: _secret()}, agent_id=None)
+
+        assert instrument.call_args.kwargs["include_content"] is True
+
+    def test_none_content_instruments_without_message_text(self):
+        """`none` is the switch a deployment over health, legal or HR data needs:
+        the run still traces its timing and cost, but no prompt, output or tool
+        argument reaches the Logfire project (#1413)."""
+        secret_id = uuid.uuid4()
+        spec = AgentSpec(
+            name="Support",
+            observability=ObservabilitySpec(token_secret_id=secret_id, content="none"),
+        )
+
+        with patch(f"{MODULE}.instrument_agent") as instrument:
+            _instrument(MagicMock(), spec, {secret_id: _secret()}, agent_id=None)
+
+        assert instrument.call_args.kwargs["include_content"] is False
+
     def test_the_agent_names_itself_when_no_service_name_was_given(self):
         """A blank service name in Logfire is a project nobody can read."""
         secret_id = uuid.uuid4()
@@ -68,7 +94,50 @@ class TestInstrumentation:
         instrument.assert_not_called()
 
 
+class TestContentReachesLogfire:
+    """The content decision has to reach the instrumentation call, not stop at
+    the spec: a `none` that the factory reads but never passes on is a promise
+    the schema makes and the exporter breaks (#1413)."""
+
+    def test_none_turns_off_content_on_the_instrumentation(self):
+        instance = MagicMock()
+        # A token unique to this test: the module caches instances per
+        # (token, service, environment), so a shared one would reuse a prior
+        # test's configure() and never call this mock.
+        with patch("app.agents.observability.logfire.configure", return_value=instance):
+            attached = instrument_agent(
+                MagicMock(),
+                token="pylf_v1_eu_none_case",
+                service_name="acme",
+                environment="prod",
+                include_content=False,
+            )
+
+        assert attached is True
+        assert instance.instrument_pydantic_ai.call_args.kwargs["include_content"] is False
+
+    def test_full_leaves_content_on(self):
+        instance = MagicMock()
+        with patch("app.agents.observability.logfire.configure", return_value=instance):
+            instrument_agent(
+                MagicMock(),
+                token="pylf_v1_eu_full_case",
+                service_name="acme",
+                environment="prod",
+            )
+
+        assert instance.instrument_pydantic_ai.call_args.kwargs["include_content"] is True
+
+
 class TestSpec:
+    def test_content_defaults_to_full_so_a_stored_spec_is_unchanged(self):
+        """Additive with a default: a spec written before the field loads with
+        `full` and traces exactly as it did, so no migration is owed."""
+        assert ObservabilitySpec().content == "full"
+        loaded = AgentSpec.from_yaml("name: Support\nobservability:\n  token_secret_id: null\n")
+        assert loaded.observability is not None
+        assert loaded.observability.content == "full"
+
     def test_the_token_is_stored_as_a_reference_never_a_value(self):
         """A spec is exported as YAML into somebody's repository. A write token
         in a checked-in file is a token that has to be rotated."""

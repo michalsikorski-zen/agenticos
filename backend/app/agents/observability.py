@@ -62,6 +62,7 @@ def instrument_agent(
     token: str,
     service_name: str,
     environment: str | None,
+    include_content: bool = True,
 ) -> bool:
     """Point one agent's traces at the Logfire project the token belongs to.
 
@@ -69,6 +70,14 @@ def instrument_agent(
     swallowed: an agent that cannot export traces still answers questions, and
     refusing to build it would turn an observability misconfiguration into an
     outage.
+
+    `include_content` is the spec's `content` mode made concrete: `False` (the
+    spec's `none`) records spans with timing, tokens, cost and tool names but no
+    message text or tool arguments, so a run over protected data leaves no copy
+    of it in the Logfire project. It is applied on the per-agent
+    `instrument_pydantic_ai` call rather than on the cached instance, because the
+    instance is shared across agents keyed on (token, service, environment) and
+    the content decision is one agent's.
     """
     key = (token, service_name, environment or "")
     instance = _instances.get(key)
@@ -88,7 +97,7 @@ def instrument_agent(
         _instances[key] = instance
 
     try:
-        instance.instrument_pydantic_ai(agent)
+        instance.instrument_pydantic_ai(agent, include_content=include_content)
     except Exception:
         logger.exception("agent_logfire_instrument_failed", extra={"service_name": service_name})
         return False
