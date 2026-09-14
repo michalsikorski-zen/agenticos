@@ -662,6 +662,32 @@ class TestOpeningAndClosing:
 
         assert mock_db_session.get.await_args.kwargs["populate_existing"] is True
 
+    async def test_the_skills_tree_from_before_the_move_is_not_persisted_again(
+        self, monkeypatch, mock_db_session
+    ):
+        """A workspace created before skills moved inside it holds them under
+        `/skills`, and the next run writes a whole second copy under
+        `/workspace/skills`. Persisting both doubles the skill footprint against
+        `SANDBOX_STATE_MAX_BYTES` and can start refusing the agent's own writes,
+        so the legacy tree is dropped at flush the way a spill is."""
+        row = _row()
+        monkeypatch.setattr(workspace_repo, "get_by_key", AsyncMock(return_value=row))
+        monkeypatch.setattr(workspace_repo, "touch", AsyncMock(return_value=row))
+        saved = AsyncMock(return_value=row)
+        monkeypatch.setattr(workspace_repo, "save_files", saved)
+        mock_db_session.get = AsyncMock(return_value=row)
+        service = SandboxWorkspaceService(mock_db_session)
+
+        workspace = await service.open(_spec(), ctx=_ctx(), identity=_identity())
+        assert workspace is not None
+        workspace.backend.write("/skills/refunds/SKILL.md", "the copy from before the move")
+        workspace.backend.write("/workspace/skills/refunds/SKILL.md", "the one this run wrote")
+        workspace.backend.write("/report.csv", "the agent's own work")
+        await service.close(workspace)
+
+        kept = saved.await_args.kwargs["files"]
+        assert sorted(kept) == ["/report.csv", "/workspace/skills/refunds/SKILL.md"]
+
     async def test_a_run_scoped_state_workspace_is_not_stored(self, monkeypatch, mock_db_session):
         """It has no row by design, so there is nowhere for it to persist to -
         which is exactly what "a fresh workspace every turn" means."""
@@ -3770,6 +3796,27 @@ class TestWhatTheBrowserDoesNotShow:
             "/report.csv",
             "/uploads/book.pdf",
         ]
+
+    async def test_a_container_spelling_a_skill_relatively_is_left_out_too(
+        self, monkeypatch, mock_db_session
+    ):
+        """A container lists its workspace relative to its own root, so the file
+        the `state` backend calls `/workspace/skills/...` arrives as `skills/...`.
+        The browser has to drop both spellings, and a workspace written before the
+        move holds the second one for real."""
+        stored = StateBackend()
+        stored.write("skills/code-review/SKILL.md", "a")
+        stored.write("/report.csv", "b")
+        row = _row(files=dict(stored.files))
+        monkeypatch.setattr(workspace_repo, "list_for_conversation", AsyncMock(return_value=[row]))
+
+        found = await SandboxWorkspaceService(mock_db_session).listing(
+            _ctx(), conversation_id=uuid4()
+        )
+
+        assert found is not None
+        _, contents = found
+        assert [str(entry.get("path")) for entry in contents.entries] == ["/report.csv"]
 
     async def test_the_flat_view_leaves_them_out_too(self, monkeypatch, mock_db_session):
         from app.repositories import agent as agent_repo

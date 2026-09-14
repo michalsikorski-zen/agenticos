@@ -46,6 +46,30 @@ logger = logging.getLogger(__name__)
 # no /skills at all (2026-09-14, first live run of a skill with 81 resources). `/workspace` is
 # the one directory every backend guarantees writable, so the skills live under it.
 SKILLS_ROOT = "/workspace/skills"
+
+LEGACY_SKILLS_ROOT = "/skills"
+"""Where skills were written before they moved inside the workspace.
+
+Nothing writes here. It is named so the two listing filters still recognise a
+workspace that predates the move, and so a flush can drop that tree instead of
+persisting a second copy of every skill beside the new one.
+"""
+
+RESERVED_SKILL_PREFIXES = ("workspace/skills/", "skills/")
+"""Every spelling a materialised skill path arrives in, the leading slash stripped.
+
+`workspace/skills/...` from a `state` backend and from a container that lists
+absolute in-container paths; `skills/...` from a container that lists relative to
+its own workspace root, and from a workspace written before the move. Matched
+after `lstrip("/")` for the reason `_NOT_THE_AGENTS` documents: the two backends
+disagree about the leading slash, so one spelling with the slash stripped at the
+match is the only form that catches both.
+
+Read by `channels.attachments` and `sandbox_workspace`, which is why it lives
+beside the root rather than in either of them - a filter that knows a different
+set of prefixes than the writer uses is how skill files reached a channel reply.
+"""
+
 BODY_FILE = "SKILL.md"
 
 # A ceiling on what one turn may propose, per file. Skills are instructions and
