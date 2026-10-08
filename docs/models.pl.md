@@ -1,5 +1,5 @@
 ---
-source_sha: "9db676be5f54"
+source_sha: "fe4be8a386ba"
 ---
 
 # Modele i providery { #models-and-providers }
@@ -148,7 +148,7 @@ ani nic, czym się uwierzytelnić.
 
     `keyless` jest prawdziwe także dla `openai`. Serwery zgodne z OpenAI (vLLM, LM
     Studio, proxy LiteLLM) mówią jego API Chat Completions, i dlatego profil
-    `openai` budowany jest jako `openai-chat`.
+    `openai` z endpointem budowany jest jako `openai-chat`.
 
     Więc samo „brak klucza” nie odróżnia świadomie lokalnego modelu od profilu,
     któremu klucz usunięto — a klucz obcy sekretu ma `ON DELETE SET NULL`, co
@@ -171,9 +171,11 @@ poprawnie, a i tak zawiedzie przy pierwszym runie. Zobacz
 
 !!! note "Dwa id są przepisywane w drodze do SDK"
 
-    Profil `openai` budowany jest jako `openai-chat`, bo samo `openai` wnioskuje
-    Responses API, a serwery zgodne z OpenAI — vLLM, LM Studio, proxy LiteLLM —
-    go nie implementują.
+    Profil `openai` z `base_url` budowany jest jako `openai-chat`, bo samo `openai`
+    wnioskuje Responses API, a serwery zgodne z OpenAI — vLLM, LM Studio, proxy
+    LiteLLM — go nie implementują. Bez `base_url` profil rozmawia z samym OpenAI i
+    budowany jest jako `openai-responses`: najnowsze modele OpenAI są dostępne tylko
+    przez Responses API, a na Chat Completions odpowiadają błędem 400.
 
     `google_cloud` budowany jest jako `google-cloud`. Żadne z nich nie zmienia
     tego, co zapisujesz.
