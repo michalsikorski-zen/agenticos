@@ -140,7 +140,7 @@ authenticate with.
 
     `keyless` is true of `openai` as well. OpenAI-compatible servers (vLLM, LM
     Studio, a LiteLLM proxy) speak its Chat Completions API, which is why an
-    `openai` profile is built as `openai-chat`.
+    `openai` profile with an endpoint is built as `openai-chat`.
 
     So "no key" alone does not distinguish a deliberate local model from a profile
     whose key was deleted — and the secret foreign key is `ON DELETE SET NULL`,
@@ -162,9 +162,12 @@ fails at the first run. See [secret kinds](secrets.md#kinds).
 
 !!! note "Two ids are rewritten on the way to the SDK"
 
-    An `openai` profile is built as `openai-chat`, because plain `openai` infers
-    the Responses API and OpenAI-compatible servers — vLLM, LM Studio, a LiteLLM
-    proxy — do not implement it.
+    An `openai` profile with a `base_url` is built as `openai-chat`, because plain
+    `openai` infers the Responses API and OpenAI-compatible servers — vLLM, LM
+    Studio, a LiteLLM proxy — do not implement it. Without a `base_url` the profile
+    talks to OpenAI itself and is built as `openai-responses`: OpenAI's newest
+    models are served on the Responses API only and answer Chat Completions with
+    a 400.
 
     `google_cloud` is built as `google-cloud`. Neither changes what you store.
 

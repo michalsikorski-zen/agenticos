@@ -66,6 +66,12 @@ class ProviderSpec:
     disagree about which wrapper we want: `openai` infers the Responses API,
     which OpenAI-compatible servers (vLLM, LM Studio, a LiteLLM proxy) do not
     implement, so an `openai` profile is built as `openai-chat`.
+
+    `native_prefix` is the wrapper for the provider's own endpoint - a profile
+    with no `base_url`. It exists for the opposite case: OpenAI's newest models
+    are served on the Responses API only and answer Chat Completions with a 400,
+    so a profile pointed at OpenAI itself is built as `openai-responses`, while
+    one pointed at a compatible server through `base_url` stays on Chat.
     """
 
     id: str
@@ -74,10 +80,17 @@ class ProviderSpec:
     base_url_param: str | None = None
     keyless: bool = False
     model_prefix: str = ""
+    native_prefix: str = ""
 
     @property
     def prefix(self) -> str:
         return self.model_prefix or self.id
+
+    def prefix_for(self, base_url: str | None) -> str:
+        """The wrapper for a credential: `native_prefix` on the provider's own endpoint."""
+        if base_url is None and self.native_prefix:
+            return self.native_prefix
+        return self.prefix
 
     @property
     def supports_base_url(self) -> bool:
@@ -91,6 +104,7 @@ def _api_key(
     base_url_param: str | None = None,
     keyless: bool = False,
     model_prefix: str = "",
+    native_prefix: str = "",
 ) -> ProviderSpec:
     """A provider whose whole credential is one token."""
     return ProviderSpec(
@@ -100,6 +114,7 @@ def _api_key(
         base_url_param=base_url_param,
         keyless=keyless,
         model_prefix=model_prefix,
+        native_prefix=native_prefix,
     )
 
 
@@ -109,7 +124,12 @@ PROVIDERS: dict[str, ProviderSpec] = {
         # Hosted providers reached at a fixed endpoint, or at a gateway of the
         # organization's choosing where the SDK allows one.
         _api_key(
-            "openai", "OpenAI", base_url_param="base_url", keyless=True, model_prefix="openai-chat"
+            "openai",
+            "OpenAI",
+            base_url_param="base_url",
+            keyless=True,
+            model_prefix="openai-chat",
+            native_prefix="openai-responses",
         ),
         _api_key("anthropic", "Anthropic", base_url_param="base_url"),
         _api_key("google", "Google Gemini", base_url_param="base_url"),
@@ -309,7 +329,7 @@ def build_model(credential: ResolvedCredential, model: str) -> Model:
     """
     spec = get_provider(credential.provider)
     return infer_model(
-        f"{spec.prefix}:{model}",
+        f"{spec.prefix_for(credential.base_url)}:{model}",
         provider_factory=lambda _: _build_provider(spec, credential),
     )
 

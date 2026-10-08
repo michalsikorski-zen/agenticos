@@ -16,6 +16,7 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic_ai.models.fallback import FallbackModel
+from pydantic_ai.models.openai import OpenAIChatModel, OpenAIResponsesModel
 
 from app.agents.model_resolver import (
     PROVIDERS,
@@ -205,6 +206,31 @@ class TestProviderCatalog:
         `base_url` exists for.
         """
         assert PROVIDERS["openai"].prefix == "openai-chat"
+        credential = ResolvedCredential(
+            provider="openai",
+            secret=ApiKeySecret(api_key="sk-test-key"),
+            base_url="http://localhost:8000/v1",
+        )
+        assert isinstance(build_model(credential, "llama3.2"), OpenAIChatModel)
+
+    def test_openai_on_its_own_endpoint_builds_a_responses_model(self):
+        """OpenAI's newest models are served on the Responses API only.
+
+        A profile with no `base_url` talks to OpenAI itself, where Chat
+        Completions answers those models with a 400 - so it is built on
+        Responses, and only a compatible server behind `base_url` stays on Chat.
+        """
+        credential = ResolvedCredential(
+            provider="openai", secret=ApiKeySecret(api_key="sk-test-key")
+        )
+        assert isinstance(build_model(credential, "gpt-6-luna"), OpenAIResponsesModel)
+
+    def test_native_prefix_is_ignored_where_a_provider_has_none(self):
+        """Every other provider builds the same wrapper with or without a `base_url`."""
+        spec = PROVIDERS["anthropic"]
+        assert (
+            spec.prefix_for(None) == spec.prefix_for("https://gateway.example.com") == "anthropic"
+        )
 
     def test_the_catalog_is_ordered_for_a_stable_picker(self):
         names = [spec.name for spec in provider_catalog()]
