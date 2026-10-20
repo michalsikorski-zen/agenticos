@@ -17,6 +17,16 @@ Two things are versioned separately from this file and worth knowing about:
 
 ## [Unreleased]
 
+### Fixed
+
+- **An MCP server that does not answer is named to the model, not left out in
+  silence.** A bound server whose probe misses the connect timeout is still
+  skipped for that turn, but it is now briefed like a prefix collision: the
+  model is told the server did not answer and that trying again may work. It
+  used to see only the servers that answered, and reported a slow server as
+  "no data" - a Semrush bridge that took ten seconds to list its tools read to
+  the agent as Semrush returning nothing.
+
 ## [1.8.3] - 2026-10-20
 
 ### Fixed
